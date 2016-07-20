@@ -59,9 +59,16 @@ public class StandardKMeans {
             GeoPoint centroid = centroids[i];
             GeoPoint topLeft = null;
             GeoPoint bottomRight = null;
+            Set<GeoPoint> points = null;
             long docCount = 0;
             for (Cluster subCluster : subClusters) {
                 docCount += subCluster.getDocCount();
+                if (subCluster.points() != null) {
+                    if (points == null) {
+                        points = new HashSet<>();
+                    }
+                    points.addAll(subCluster.points());
+                }
                 if (topLeft == null) {
                     topLeft = new GeoPoint(subCluster.getTopLeft());
                 } else {
@@ -83,7 +90,11 @@ public class StandardKMeans {
                     }
                 }
             }
-            results.add(new InternalGeoKMeans.InternalCluster(centroid, docCount, topLeft, bottomRight));
+            InternalGeoKMeans.InternalCluster cluster = new InternalGeoKMeans.InternalCluster(centroid, docCount, topLeft, bottomRight);
+            if (points != null) {
+                cluster.points(points);
+            }
+            results.add(cluster);
         }
         return results;
     }

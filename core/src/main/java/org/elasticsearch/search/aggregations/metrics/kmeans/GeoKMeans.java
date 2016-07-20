@@ -25,6 +25,7 @@ import org.elasticsearch.common.xcontent.ToXContent;
 import org.elasticsearch.search.aggregations.Aggregation;
 
 import java.util.List;
+import java.util.Set;
 
 public interface GeoKMeans extends Aggregation {
 
@@ -39,5 +40,7 @@ public interface GeoKMeans extends Aggregation {
         public GeoPoint getBottomRight();
 
         public long getDocCount();
+
+        public Set<GeoPoint> points();
     }
 }

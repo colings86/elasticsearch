@@ -35,6 +35,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 public class InternalGeoKMeans extends InternalMetricsAggregation implements GeoKMeans {
 
@@ -145,6 +146,7 @@ public class InternalGeoKMeans extends InternalMetricsAggregation implements Geo
         private long docCount;
         private GeoPoint topLeft;
         private GeoPoint bottomRight;
+        private Set<GeoPoint> points = null;
 
         public InternalCluster(GeoPoint centroid, long docCount, GeoPoint topLeft, GeoPoint bottomRight) {
             this.centroid = centroid;
@@ -169,6 +171,15 @@ public class InternalGeoKMeans extends InternalMetricsAggregation implements Geo
             out.writeDouble(topLeft.getLon());
             out.writeDouble(bottomRight.getLat());
             out.writeDouble(bottomRight.getLon());
+        }
+
+        @Override
+        public Set<GeoPoint> points() {
+            return points;
+        }
+
+        public void points(Set<GeoPoint> points) {
+            this.points = points;
         }
 
         @Override
@@ -207,6 +218,16 @@ public class InternalGeoKMeans extends InternalMetricsAggregation implements Geo
             builder.field("lat", bottomRight.getLat());
             builder.field("lon", bottomRight.getLon());
             builder.endObject();
+            if (points != null) {
+                builder.startArray("points");
+                for (GeoPoint point : points) {
+                    builder.startObject();
+                    builder.field("lat", point.getLat());
+                    builder.field("lon", point.getLon());
+                    builder.endObject();
+                }
+                builder.endArray();
+            }
             builder.endObject();
             return builder;
         }

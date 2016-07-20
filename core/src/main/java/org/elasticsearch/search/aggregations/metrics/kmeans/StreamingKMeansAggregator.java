@@ -40,9 +40,11 @@ import org.elasticsearch.search.aggregations.support.ValuesSource;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.Set;
 
 public class StreamingKMeansAggregator extends MetricsAggregator {
 
@@ -55,6 +57,7 @@ public class StreamingKMeansAggregator extends MetricsAggregator {
     private LongArray docCounts;
     private ObjectArray<GeoPoint> topLeftClusterBounds;
     private ObjectArray<GeoPoint> bottomRightClusterBounds;
+    private ObjectArray<Set<GeoPoint>> points;
     private int numPoints;
     private Random random;
     private ValuesSource.GeoPoint valuesSource;
@@ -79,6 +82,7 @@ public class StreamingKMeansAggregator extends MetricsAggregator {
         docCounts = bigArrays.newLongArray(0);
         topLeftClusterBounds = bigArrays.newObjectArray(0);
         bottomRightClusterBounds = bigArrays.newObjectArray(0);
+        points = bigArrays.newObjectArray(0);
         numClusters = 0;
     }
 
@@ -118,10 +122,14 @@ public class StreamingKMeansAggregator extends MetricsAggregator {
             docCounts = bigArrays.grow(docCounts, numClusters + 1);
             topLeftClusterBounds = bigArrays.grow(topLeftClusterBounds, numClusters + 1);
             bottomRightClusterBounds = bigArrays.grow(bottomRightClusterBounds, numClusters + 1);
+            points = bigArrays.grow(points, numClusters + 1);
             centroids.set(numClusters, point);
             docCounts.set(numClusters, 1L);
             topLeftClusterBounds.set(numClusters, new GeoPoint(point));
             bottomRightClusterBounds.set(numClusters, new GeoPoint(point));
+            Set<GeoPoint> clusterPoints = new HashSet<>();
+            clusterPoints.add(new GeoPoint(point));
+            points.set(numClusters, clusterPoints);
             numClusters++;
         } else {
             // add to existing centroid
@@ -148,6 +156,8 @@ public class StreamingKMeansAggregator extends MetricsAggregator {
             double newMeanLon = existingCentroid.getLon() + (point.getLon() - existingCentroid.getLon()) / newDocCount;
             GeoPoint newCentroid = new GeoPoint(newMeanLat, newMeanLon);
             centroids.set(nearestCentroidIndex, newCentroid);
+            Set<GeoPoint> existingClusterPoints = points.get(nearestCentroidIndex);
+            existingClusterPoints.add(new GeoPoint(point));
         }
     }
 
@@ -158,16 +168,19 @@ public class StreamingKMeansAggregator extends MetricsAggregator {
             ObjectArray<GeoPoint> newCentroids = bigArrays.newObjectArray(1);
             ObjectArray<GeoPoint> newTopLeftClusterBounds = bigArrays.newObjectArray(1);
             ObjectArray<GeoPoint> newBottomRightClusterBounds = bigArrays.newObjectArray(1);
+            ObjectArray<Set<GeoPoint>> newPoints = bigArrays.newObjectArray(1);
             LongArray newDocCounts = bigArrays.newLongArray(1);
             int newNumClusters = 1;
             newCentroids.set(0, centroids.get(0));
             newTopLeftClusterBounds.set(0, topLeftClusterBounds.get(0));
             newBottomRightClusterBounds.set(0, bottomRightClusterBounds.get(0));
             newDocCounts.set(0, docCounts.get(0));
+            newPoints.set(0, points.get(0));
             for (int i = 1; i < numClusters; i++) {
                 GeoPoint centroid = centroids.get(i);
                 GeoPoint clusterTopLeft = topLeftClusterBounds.get(i);
                 GeoPoint clusterBottomRight = bottomRightClusterBounds.get(i);
+                Set<GeoPoint> clusterPoints = points.get(i);
                 long docCount = docCounts.get(i);
                 MinDistanceResult minDistResult = calculateMinDistance(centroid, newCentroids, newNumClusters);
                 int nearestCentroidIndex = minDistResult.nearestCentroidIndex;
@@ -179,10 +192,12 @@ public class StreamingKMeansAggregator extends MetricsAggregator {
                     newDocCounts = bigArrays.grow(newDocCounts, newNumClusters + 1);
                     newTopLeftClusterBounds = bigArrays.grow(newTopLeftClusterBounds, newNumClusters + 1);
                     newBottomRightClusterBounds = bigArrays.grow(newBottomRightClusterBounds, newNumClusters + 1);
+                    newPoints = bigArrays.grow(newPoints, newNumClusters + 1);
                     newCentroids.set(newNumClusters, centroid);
                     newDocCounts.set(newNumClusters, docCount);
                     newTopLeftClusterBounds.set(newNumClusters, clusterTopLeft);
                     newBottomRightClusterBounds.set(newNumClusters, clusterBottomRight);
+                    newPoints.set(newNumClusters, clusterPoints);
                     newNumClusters++;
                 } else {
                     long newDocCount = newDocCounts.increment(nearestCentroidIndex, docCount);
@@ -212,12 +227,15 @@ public class StreamingKMeansAggregator extends MetricsAggregator {
                             + docCount * (centroid.getLon() - existingCentroid.getLon()) / newDocCount;
                     GeoPoint newCentroid = new GeoPoint(newMeanLat, newMeanLon);
                     newCentroids.set(nearestCentroidIndex, newCentroid);
+                    Set<GeoPoint> existingPoints = newPoints.get(nearestCentroidIndex);
+                    existingPoints.addAll(clusterPoints);
                 }
             }
             centroids = newCentroids;
             docCounts = newDocCounts;
             topLeftClusterBounds = newTopLeftClusterBounds;
             bottomRightClusterBounds = newBottomRightClusterBounds;
+            points = newPoints;
             numClusters = newNumClusters;
         }
     }
@@ -260,8 +278,9 @@ public class StreamingKMeansAggregator extends MetricsAggregator {
         mergeClusters();
         List<Cluster> clusters = new ArrayList<>();
         for (int i = 0; i < numClusters; i++) {
-            Cluster cluster = new InternalCluster(centroids.get(i), docCounts.get(i), topLeftClusterBounds.get(i),
+            InternalCluster cluster = new InternalCluster(centroids.get(i), docCounts.get(i), topLeftClusterBounds.get(i),
                     bottomRightClusterBounds.get(i));
+            cluster.points(points.get(i));
             clusters.add(cluster);
         }
         return new InternalGeoKMeans(name, numFinalClusters, clusters, numPoints, pipelineAggregators(), metaData());
