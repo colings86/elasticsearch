@@ -17,36 +17,23 @@
  * under the License.
  */
 
-package org.elasticsearch.search.aggregations.metrics.kmeans;
+package org.elasticsearch.search.aggregations.metrics.geokmeans;
 
-import org.apache.lucene.index.LeafReaderContext;
 import org.elasticsearch.common.geo.GeoPoint;
 import org.elasticsearch.common.util.BigArrays;
 import org.elasticsearch.common.util.LongArray;
 import org.elasticsearch.common.util.ObjectArray;
-import org.elasticsearch.index.fielddata.MultiGeoPointValues;
-import org.elasticsearch.search.aggregations.Aggregator;
-import org.elasticsearch.search.aggregations.AggregatorFactories;
-import org.elasticsearch.search.aggregations.InternalAggregation;
 import org.elasticsearch.search.aggregations.LeafBucketCollector;
-import org.elasticsearch.search.aggregations.LeafBucketCollectorBase;
-import org.elasticsearch.search.aggregations.metrics.MetricsAggregator;
-import org.elasticsearch.search.aggregations.metrics.kmeans.GeoKMeans.Cluster;
-import org.elasticsearch.search.aggregations.metrics.kmeans.InternalGeoKMeans.InternalCluster;
-import org.elasticsearch.search.aggregations.pipeline.PipelineAggregator;
-import org.elasticsearch.search.aggregations.support.AggregationContext;
-import org.elasticsearch.search.aggregations.support.ValuesSource;
-
+import org.elasticsearch.search.aggregations.metrics.geokmeans.GeoKMeans.Cluster;
+import org.elasticsearch.search.aggregations.metrics.geokmeans.InternalGeoKMeans.InternalCluster;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 
-public class StreamingKMeansAggregator extends MetricsAggregator {
+public class StreamingKMeans {
 
     private int numFinalClusters;
     private double maxStreamingClustersCoeff;
@@ -60,49 +47,25 @@ public class StreamingKMeansAggregator extends MetricsAggregator {
     private ObjectArray<Set<GeoPoint>> points;
     private int numPoints;
     private Random random;
-    private ValuesSource.GeoPoint valuesSource;
     private BigArrays bigArrays;
     private long numClusters;
 
-    public StreamingKMeansAggregator(String name, AggregatorFactories factories, int numClusters, double maxStreamingClustersCoeff,
-            double distanceCutoffCoeffMultiplier, ValuesSource.GeoPoint valuesSource, AggregationContext aggregationContext,
-            Aggregator parent, List<PipelineAggregator> pipelineAggregators, Map<String, Object> metaData) throws IOException {
-        super(name, aggregationContext, parent, pipelineAggregators, metaData);
-        this.numFinalClusters = numClusters;
+    public StreamingKMeans(int numFinalClusters, double maxStreamingClustersCoeff, double distanceCutoffCoeffMultiplier, Random random,
+            BigArrays bigArrays) {
+        this.numFinalClusters = numFinalClusters;
         this.maxStreamingClustersCoeff = maxStreamingClustersCoeff;
         this.distanceCutoffCoeffMultiplier = distanceCutoffCoeffMultiplier;
+        this.random = random;
+        this.bigArrays = bigArrays;
+
+        this.numPoints = 0;
+        this.numClusters = 0;
         this.distanceCutoffCoeff = 1;
-        this.valuesSource = valuesSource;
-        // NOCOMMIT check that is indeed valid to use the shardID as the random
-        // seed
-        random = new Random(aggregationContext.searchContext().indexShard().shardId().hashCode());
-        numPoints = 0;
-        bigArrays = aggregationContext.bigArrays();
-        centroids = bigArrays.newObjectArray(0);
-        docCounts = bigArrays.newLongArray(0);
-        topLeftClusterBounds = bigArrays.newObjectArray(0);
-        bottomRightClusterBounds = bigArrays.newObjectArray(0);
-        points = bigArrays.newObjectArray(0);
-        numClusters = 0;
-    }
-
-    @Override
-    protected LeafBucketCollector getLeafCollector(LeafReaderContext ctx, LeafBucketCollector sub) throws IOException {
-        final MultiGeoPointValues values = valuesSource.geoPointValues(ctx);
-        return new LeafBucketCollectorBase(sub, null) {
-            @Override
-            public void collect(int doc, long bucket) throws IOException {
-                assert bucket == 0;
-                values.setDocument(doc);
-                final int valuesCount = values.count();
-
-                GeoPoint previous = null;
-                for (int i = 0; i < valuesCount; ++i) {
-                    final GeoPoint val = new GeoPoint(values.valueAt(i));
-                    collectPoint(val, sub, doc);
-                }
-            }
-        };
+        this.centroids = bigArrays.newObjectArray(0);
+        this.docCounts = bigArrays.newLongArray(0);
+        this.topLeftClusterBounds = bigArrays.newObjectArray(0);
+        this.bottomRightClusterBounds = bigArrays.newObjectArray(0);
+        this.points = bigArrays.newObjectArray(0);
     }
 
     public void collectPoint(GeoPoint point, LeafBucketCollector sub, int doc) throws IOException {
@@ -270,10 +233,9 @@ public class StreamingKMeansAggregator extends MetricsAggregator {
         public double distance;
     }
 
-    @Override
-    public InternalAggregation buildAggregation(long bucket) throws IOException {
+    public List<Cluster> getClusters() {
         if (numClusters == 0) {
-            return buildEmptyAggregation();
+            return null;
         }
         mergeClusters();
         List<Cluster> clusters = new ArrayList<>();
@@ -283,12 +245,15 @@ public class StreamingKMeansAggregator extends MetricsAggregator {
             cluster.points(points.get(i));
             clusters.add(cluster);
         }
-        return new InternalGeoKMeans(name, numFinalClusters, clusters, numPoints, pipelineAggregators(), metaData());
+        return clusters;
     }
 
-    @Override
-    public InternalAggregation buildEmptyAggregation() {
-        return new InternalGeoKMeans(name, numFinalClusters, Collections.emptyList(), 0, pipelineAggregators(), metaData());
+    public int getNumFinalClusters() {
+        return numFinalClusters;
+    }
+
+    public int getNumPoints() {
+        return numPoints;
     }
 
 }

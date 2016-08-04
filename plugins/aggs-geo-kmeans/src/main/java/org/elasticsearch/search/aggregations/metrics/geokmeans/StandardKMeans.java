@@ -17,10 +17,10 @@
  * under the License.
  */
 
-package org.elasticsearch.search.aggregations.metrics.kmeans;
+package org.elasticsearch.search.aggregations.metrics.geokmeans;
 
 import org.elasticsearch.common.geo.GeoPoint;
-import org.elasticsearch.search.aggregations.metrics.kmeans.GeoKMeans.Cluster;
+import org.elasticsearch.search.aggregations.metrics.geokmeans.GeoKMeans.Cluster;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -34,6 +34,7 @@ public class StandardKMeans {
     private int k;
     private List<Cluster> clusters;
 
+    @SuppressWarnings({ "unchecked", "rawtypes" })
     public StandardKMeans(int k, List<Cluster> clusters) {
         this.k = k;
         this.clusters = clusters;

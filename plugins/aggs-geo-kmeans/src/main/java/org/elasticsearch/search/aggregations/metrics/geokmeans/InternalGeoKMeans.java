@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.elasticsearch.search.aggregations.metrics.kmeans;
+package org.elasticsearch.search.aggregations.metrics.geokmeans;
 
 import org.elasticsearch.common.geo.GeoPoint;
 import org.elasticsearch.common.io.stream.StreamInput;
@@ -55,6 +55,7 @@ public class InternalGeoKMeans extends InternalMetricsAggregation implements Geo
     }
 
     public InternalGeoKMeans(StreamInput in) throws IOException {
+        super(in);
         this.k = in.readVInt();
         int size = in.readVInt();
         List<Cluster> clusters = new ArrayList<>(size);

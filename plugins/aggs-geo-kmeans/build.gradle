@@ -17,30 +17,7 @@
  * under the License.
  */
 
-package org.elasticsearch.search.aggregations.metrics.kmeans;
-
-import org.elasticsearch.common.geo.GeoPoint;
-import org.elasticsearch.common.io.stream.Writeable;
-import org.elasticsearch.common.xcontent.ToXContent;
-import org.elasticsearch.search.aggregations.Aggregation;
-
-import java.util.List;
-import java.util.Set;
-
-public interface GeoKMeans extends Aggregation {
-
-    public List<Cluster> getClusters();
-
-    public static interface Cluster extends ToXContent, Writeable {
-
-        public GeoPoint getCentroid();
-
-        public GeoPoint getTopLeft();
-
-        public GeoPoint getBottomRight();
-
-        public long getDocCount();
-
-        public Set<GeoPoint> points();
-    }
+esplugin {
+    description 'Adds an aggregation which performs k-means clustering on a GeoPoint field.'
+    classname 'org.elasticsearch.search.aggregations.metrics.GeoKMeansPlugin'
 }

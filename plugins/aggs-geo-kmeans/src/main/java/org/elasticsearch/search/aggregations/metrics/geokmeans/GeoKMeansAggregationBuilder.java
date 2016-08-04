@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.elasticsearch.search.aggregations.metrics.kmeans;
+package org.elasticsearch.search.aggregations.metrics.geokmeans;
 
 import org.elasticsearch.common.ParseField;
 import org.elasticsearch.common.io.stream.StreamInput;
@@ -42,7 +42,7 @@ public class GeoKMeansAggregationBuilder extends ValuesSourceAggregationBuilder<
     public static final ParseField CLUSTERS_FIELD = new ParseField("clusters");
     public static final ParseField MAX_STREAM_CLUSTERS_COEFF_FIELD = new ParseField("max_clusters_coeff");
     public static final ParseField DIST_CUTOFF_MULTIPLIER_FIELD = new ParseField("distance_cutoff_multiplier");
-    public static final ParseField AGGREGATION_NAME_FIED = new ParseField(InternalGeoKMeans.NAME);
+    public static final ParseField AGGREGATION_NAME_FIELD = new ParseField(InternalGeoKMeans.NAME);
 
     private int numClusters = 20;
     private double maxStreamingClustersCoeff = 1;
@@ -68,7 +68,7 @@ public class GeoKMeansAggregationBuilder extends ValuesSourceAggregationBuilder<
 
     @Override
     public String getWriteableName() {
-        return AGGREGATION_NAME_FIED.getPreferredName();
+        return AGGREGATION_NAME_FIELD.getPreferredName();
     }
 
     /**
