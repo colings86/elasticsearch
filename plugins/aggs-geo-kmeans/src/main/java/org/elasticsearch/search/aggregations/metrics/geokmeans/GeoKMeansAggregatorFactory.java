@@ -22,13 +22,12 @@ package org.elasticsearch.search.aggregations.metrics.geokmeans;
 import org.elasticsearch.search.aggregations.Aggregator;
 import org.elasticsearch.search.aggregations.AggregatorFactories.Builder;
 import org.elasticsearch.search.aggregations.AggregatorFactory;
-import org.elasticsearch.search.aggregations.InternalAggregation.Type;
 import org.elasticsearch.search.aggregations.pipeline.PipelineAggregator;
-import org.elasticsearch.search.aggregations.support.AggregationContext;
 import org.elasticsearch.search.aggregations.support.ValuesSource;
 import org.elasticsearch.search.aggregations.support.ValuesSource.GeoPoint;
 import org.elasticsearch.search.aggregations.support.ValuesSourceAggregatorFactory;
 import org.elasticsearch.search.aggregations.support.ValuesSourceConfig;
+import org.elasticsearch.search.internal.SearchContext;
 
 import java.io.IOException;
 import java.util.List;
@@ -41,9 +40,9 @@ public class GeoKMeansAggregatorFactory extends ValuesSourceAggregatorFactory<Va
     private double distanceCutoffCoeffMultiplier;
 
     public GeoKMeansAggregatorFactory(String name, int numClusters, double maxStreamingClustersCoeff, double distanceCutoffCoeffMultiplier,
-            Type type, ValuesSourceConfig<GeoPoint> config, AggregationContext context, AggregatorFactory<?> parent,
+            ValuesSourceConfig<GeoPoint> config, SearchContext context, AggregatorFactory<?> parent,
             Builder subFactoriesBuilder, Map<String, Object> metaData) throws IOException {
-        super(name, type, config, context, parent, subFactoriesBuilder, metaData);
+        super(name, config, context, parent, subFactoriesBuilder, metaData);
         this.numClusters = numClusters;
         this.maxStreamingClustersCoeff = maxStreamingClustersCoeff;
         this.distanceCutoffCoeffMultiplier = distanceCutoffCoeffMultiplier;

@@ -426,6 +426,8 @@ public class SearchModule {
                 GeoHashGridAggregationBuilder::parse).addResultReader(InternalGeoHashGrid::new));
         registerAggregation(new AggregationSpec(GeoTileGridAggregationBuilder.NAME, GeoTileGridAggregationBuilder::new,
                 GeoTileGridAggregationBuilder::parse).addResultReader(InternalGeoTileGrid::new));
+        registerAggregation(new AggregationSpec(GeoKMeansAggregationBuilder::new, new GeoKMeansParser(),
+                GeoKMeansAggregationBuilder.AGGREGATION_NAME_FIED).addResultReader(InternalGeoKMeans::new));
         registerAggregation(new AggregationSpec(NestedAggregationBuilder.NAME, NestedAggregationBuilder::new,
                 NestedAggregationBuilder::parse).addResultReader(InternalNested::new));
         registerAggregation(new AggregationSpec(ReverseNestedAggregationBuilder.NAME, ReverseNestedAggregationBuilder::new,

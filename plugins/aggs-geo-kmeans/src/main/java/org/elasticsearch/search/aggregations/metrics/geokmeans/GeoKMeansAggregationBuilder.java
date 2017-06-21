@@ -22,38 +22,57 @@ package org.elasticsearch.search.aggregations.metrics.geokmeans;
 import org.elasticsearch.common.ParseField;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
+import org.elasticsearch.common.xcontent.ObjectParser;
 import org.elasticsearch.common.xcontent.XContentBuilder;
+import org.elasticsearch.index.query.QueryParseContext;
+import org.elasticsearch.search.aggregations.AggregationBuilder;
 import org.elasticsearch.search.aggregations.AggregatorFactories.Builder;
 import org.elasticsearch.search.aggregations.AggregatorFactory;
-import org.elasticsearch.search.aggregations.support.AggregationContext;
 import org.elasticsearch.search.aggregations.support.ValueType;
 import org.elasticsearch.search.aggregations.support.ValuesSource;
 import org.elasticsearch.search.aggregations.support.ValuesSource.GeoPoint;
 import org.elasticsearch.search.aggregations.support.ValuesSourceAggregationBuilder;
 import org.elasticsearch.search.aggregations.support.ValuesSourceAggregatorFactory;
 import org.elasticsearch.search.aggregations.support.ValuesSourceConfig;
+import org.elasticsearch.search.aggregations.support.ValuesSourceParserHelper;
 import org.elasticsearch.search.aggregations.support.ValuesSourceType;
+import org.elasticsearch.search.internal.SearchContext;
 
 import java.io.IOException;
 import java.util.Objects;
 
 public class GeoKMeansAggregationBuilder extends ValuesSourceAggregationBuilder<ValuesSource.GeoPoint, GeoKMeansAggregationBuilder> {
+    public static final String NAME = "geo_kmeans";
 
     public static final ParseField CLUSTERS_FIELD = new ParseField("clusters");
     public static final ParseField MAX_STREAM_CLUSTERS_COEFF_FIELD = new ParseField("max_clusters_coeff");
     public static final ParseField DIST_CUTOFF_MULTIPLIER_FIELD = new ParseField("distance_cutoff_multiplier");
-    public static final ParseField AGGREGATION_NAME_FIELD = new ParseField(InternalGeoKMeans.NAME);
+
+    private static final ObjectParser<GeoKMeansAggregationBuilder, QueryParseContext> PARSER;
+    static {
+        PARSER = new ObjectParser<>(GeoKMeansAggregationBuilder.NAME);
+        ValuesSourceParserHelper.declareGeoFields(PARSER, false, false);
+        PARSER.declareInt(GeoKMeansAggregationBuilder::setNumClusters, GeoKMeansAggregationBuilder.CLUSTERS_FIELD);
+        PARSER.declareDouble(GeoKMeansAggregationBuilder::setMaxStreamingClustersCoeff,
+                GeoKMeansAggregationBuilder.DIST_CUTOFF_MULTIPLIER_FIELD);
+        PARSER.declareDouble(GeoKMeansAggregationBuilder::setDistanceCutoffCoeffMultiplier,
+                GeoKMeansAggregationBuilder.MAX_STREAM_CLUSTERS_COEFF_FIELD);
+    }
+
+    public static AggregationBuilder parse(String aggregationName, QueryParseContext context) throws IOException {
+        return PARSER.parse(context.parser(), new GeoKMeansAggregationBuilder(aggregationName), context);
+    }
 
     private int numClusters = 20;
     private double maxStreamingClustersCoeff = 1;
     private double distanceCutoffCoeffMultiplier = 2;
 
     public GeoKMeansAggregationBuilder(String name) {
-        super(name, InternalGeoKMeans.TYPE, ValuesSourceType.GEOPOINT, ValueType.GEOPOINT);
+        super(name, ValuesSourceType.GEOPOINT, ValueType.GEOPOINT);
     }
 
     public GeoKMeansAggregationBuilder(StreamInput in) throws IOException {
-        super(in, InternalGeoKMeans.TYPE, ValuesSourceType.GEOPOINT, ValueType.GEOPOINT);
+        super(in, ValuesSourceType.GEOPOINT, ValueType.GEOPOINT);
         numClusters = in.readVInt();
         maxStreamingClustersCoeff = in.readDouble();
         distanceCutoffCoeffMultiplier = in.readDouble();
@@ -67,8 +86,8 @@ public class GeoKMeansAggregationBuilder extends ValuesSourceAggregationBuilder<
     }
 
     @Override
-    public String getWriteableName() {
-        return AGGREGATION_NAME_FIELD.getPreferredName();
+    public String getType() {
+        return NAME;
     }
 
     /**
@@ -108,9 +127,9 @@ public class GeoKMeansAggregationBuilder extends ValuesSourceAggregationBuilder<
     }
 
     @Override
-    protected ValuesSourceAggregatorFactory<GeoPoint, ?> innerBuild(AggregationContext context, ValuesSourceConfig<GeoPoint> config,
+    protected ValuesSourceAggregatorFactory<GeoPoint, ?> innerBuild(SearchContext context, ValuesSourceConfig<GeoPoint> config,
             AggregatorFactory<?> parent, Builder subFactoriesBuilder) throws IOException {
-        return new GeoKMeansAggregatorFactory(name, numClusters, maxStreamingClustersCoeff, distanceCutoffCoeffMultiplier, type, config,
+        return new GeoKMeansAggregatorFactory(name, numClusters, maxStreamingClustersCoeff, distanceCutoffCoeffMultiplier, config,
                 context, parent, subFactoriesBuilder, metaData);
     }
 

@@ -31,8 +31,8 @@ import org.elasticsearch.search.aggregations.LeafBucketCollectorBase;
 import org.elasticsearch.search.aggregations.metrics.MetricsAggregator;
 import org.elasticsearch.search.aggregations.metrics.geokmeans.GeoKMeans.Cluster;
 import org.elasticsearch.search.aggregations.pipeline.PipelineAggregator;
-import org.elasticsearch.search.aggregations.support.AggregationContext;
 import org.elasticsearch.search.aggregations.support.ValuesSource;
+import org.elasticsearch.search.internal.SearchContext;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -46,14 +46,13 @@ public class StreamingKMeansAggregator extends MetricsAggregator {
     private ValuesSource.GeoPoint valuesSource;
 
     public StreamingKMeansAggregator(String name, AggregatorFactories factories, int numClusters, double maxStreamingClustersCoeff,
-            double distanceCutoffCoeffMultiplier, ValuesSource.GeoPoint valuesSource, AggregationContext aggregationContext,
+            double distanceCutoffCoeffMultiplier, ValuesSource.GeoPoint valuesSource, SearchContext context,
             Aggregator parent, List<PipelineAggregator> pipelineAggregators, Map<String, Object> metaData) throws IOException {
-        super(name, aggregationContext, parent, pipelineAggregators, metaData);
+        super(name, context, parent, pipelineAggregators, metaData);
         this.valuesSource = valuesSource;
-        // NOCOMMIT check that is indeed valid to use the shardID as the random
-        // seed
-        Random random = new Random(aggregationContext.searchContext().indexShard().shardId().hashCode());
-        BigArrays bigArrays = aggregationContext.bigArrays();
+        // NOCOMMIT check that is indeed valid to use the shardID as the random seed
+        Random random = new Random(context.indexShard().shardId().hashCode());
+        BigArrays bigArrays = context.bigArrays();
         this.kmeans = new StreamingKMeans(numClusters, maxStreamingClustersCoeff, distanceCutoffCoeffMultiplier, random, bigArrays);
     }
 
@@ -64,12 +63,12 @@ public class StreamingKMeansAggregator extends MetricsAggregator {
             @Override
             public void collect(int doc, long bucket) throws IOException {
                 assert bucket == 0;
-                values.setDocument(doc);
-                final int valuesCount = values.count();
-
-                for (int i = 0; i < valuesCount; ++i) {
-                    final GeoPoint val = new GeoPoint(values.valueAt(i));
-                    kmeans.collectPoint(val, sub, doc);
+                if (values.advanceExact(doc)) {
+                    final int valueCount = values.docValueCount();
+                    for (int i = 0; i < valueCount; i++) {
+                        final GeoPoint val = new GeoPoint(values.nextValue());
+                        kmeans.collectPoint(val, sub, doc);
+                    }
                 }
             }
         };

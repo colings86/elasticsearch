@@ -22,7 +22,6 @@ package org.elasticsearch.search.aggregations.metrics;
 import org.elasticsearch.plugins.Plugin;
 import org.elasticsearch.plugins.SearchPlugin;
 import org.elasticsearch.search.aggregations.metrics.geokmeans.GeoKMeansAggregationBuilder;
-import org.elasticsearch.search.aggregations.metrics.geokmeans.GeoKMeansParser;
 import org.elasticsearch.search.aggregations.metrics.geokmeans.InternalGeoKMeans;
 
 import java.util.List;
@@ -33,7 +32,8 @@ public class GeoKMeansPlugin extends Plugin implements SearchPlugin {
 
     @Override
     public List<AggregationSpec> getAggregations() {
-        return singletonList(new AggregationSpec(GeoKMeansAggregationBuilder.AGGREGATION_NAME_FIELD, GeoKMeansAggregationBuilder::new,
-                new GeoKMeansParser()).addResultReader(InternalGeoKMeans::new));
+        return singletonList(
+                new AggregationSpec(GeoKMeansAggregationBuilder.NAME, GeoKMeansAggregationBuilder::new, GeoKMeansAggregationBuilder::parse)
+                        .addResultReader(InternalGeoKMeans::new));
     }
 }

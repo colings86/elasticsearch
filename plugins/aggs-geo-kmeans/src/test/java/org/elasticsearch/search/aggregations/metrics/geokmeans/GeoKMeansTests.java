@@ -1,5 +1,3 @@
-import org.elasticsearch.test.ESTestCase;
-
 /*
  * Licensed to Elasticsearch under one or more contributor
  * license agreements. See the NOTICE file distributed with
@@ -18,6 +16,9 @@ import org.elasticsearch.test.ESTestCase;
  * specific language governing permissions and limitations
  * under the License.
  */
+package org.elasticsearch.search.aggregations.metrics.geokmeans;
+
+import org.elasticsearch.test.ESTestCase;
 
 public class GeoKMeansTests extends ESTestCase {
 

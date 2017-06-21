@@ -26,7 +26,6 @@ import org.elasticsearch.common.io.stream.Writeable;
 import org.elasticsearch.common.xcontent.ToXContent;
 import org.elasticsearch.common.xcontent.XContentBuilder;
 import org.elasticsearch.search.aggregations.InternalAggregation;
-import org.elasticsearch.search.aggregations.metrics.InternalMetricsAggregation;
 import org.elasticsearch.search.aggregations.pipeline.PipelineAggregator;
 
 import java.io.IOException;
@@ -37,10 +36,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-public class InternalGeoKMeans extends InternalMetricsAggregation implements GeoKMeans {
+public class InternalGeoKMeans extends InternalAggregation implements GeoKMeans {
 
     public static final String NAME = "geo_kmeans";
-    public static final Type TYPE = new Type(NAME);
 
     private final List<Cluster> clusters;
     private final long totalNumPoints;
@@ -210,7 +208,7 @@ public class InternalGeoKMeans extends InternalMetricsAggregation implements Geo
             builder.field("lat", centroid.getLat());
             builder.field("lon", centroid.getLon());
             builder.endObject();
-            builder.field(CommonFields.DOC_COUNT, docCount);
+            builder.field(CommonFields.DOC_COUNT.getPreferredName(), docCount);
             builder.startObject("top_left");
             builder.field("lat", topLeft.getLat());
             builder.field("lon", topLeft.getLon());
