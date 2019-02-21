@@ -22,10 +22,11 @@ package org.elasticsearch.search.aggregations.metrics.geokmeans;
 import org.elasticsearch.common.geo.GeoPoint;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
-import org.elasticsearch.common.io.stream.Writeable;
-import org.elasticsearch.common.xcontent.ToXContent;
 import org.elasticsearch.common.xcontent.XContentBuilder;
+import org.elasticsearch.search.aggregations.Aggregations;
 import org.elasticsearch.search.aggregations.InternalAggregation;
+import org.elasticsearch.search.aggregations.InternalAggregations;
+import org.elasticsearch.search.aggregations.InternalMultiBucketAggregation;
 import org.elasticsearch.search.aggregations.pipeline.PipelineAggregator;
 
 import java.io.IOException;
@@ -34,21 +35,22 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
+import java.util.Objects;
 
-public class InternalGeoKMeans extends InternalAggregation implements GeoKMeans {
+public class InternalGeoKMeans extends InternalMultiBucketAggregation<InternalGeoKMeans, InternalGeoKMeans.Bucket>
+        implements GeoKMeans {
 
     public static final String NAME = "geo_kmeans";
 
-    private final List<Cluster> clusters;
+    private final List<Bucket> buckets;
     private final long totalNumPoints;
     private final int k;
 
-    public InternalGeoKMeans(String name, int k, List<Cluster> clusters, long totalNumPoints, List<PipelineAggregator> pipelineAggregators,
+    public InternalGeoKMeans(String name, int k, List<Bucket> buckets, long totalNumPoints, List<PipelineAggregator> pipelineAggregators,
             Map<String, Object> metaData) {
         super(name, pipelineAggregators, metaData);
         this.k = k;
-        this.clusters = clusters;
+        this.buckets = buckets;
         this.totalNumPoints = totalNumPoints;
     }
 
@@ -56,20 +58,20 @@ public class InternalGeoKMeans extends InternalAggregation implements GeoKMeans 
         super(in);
         this.k = in.readVInt();
         int size = in.readVInt();
-        List<Cluster> clusters = new ArrayList<>(size);
+        List<Bucket> buckets = new ArrayList<>(size);
         for (int i = 0; i < size; i++) {
-            clusters.add(new InternalCluster(in));
+            buckets.add(new Bucket(in));
         }
-        this.clusters = clusters;
+        this.buckets = buckets;
         this.totalNumPoints = in.readVLong();
     }
 
     @Override
     protected void doWriteTo(StreamOutput out) throws IOException {
         out.writeVInt(k);
-        out.writeVInt(clusters.size());
-        for (Cluster cluster : clusters) {
-            cluster.writeTo(out);
+        out.writeVInt(buckets.size());
+        for (Bucket bucket : buckets) {
+            bucket.writeTo(out);
         }
         out.writeVLong(totalNumPoints);
     }
@@ -80,8 +82,8 @@ public class InternalGeoKMeans extends InternalAggregation implements GeoKMeans 
     }
 
     @Override
-    public List<Cluster> getClusters() {
-        return clusters;
+    public List<Bucket> getBuckets() {
+        return buckets;
     }
 
     public long getTotalNumPoints() {
@@ -90,18 +92,18 @@ public class InternalGeoKMeans extends InternalAggregation implements GeoKMeans 
 
     @Override
     public InternalAggregation doReduce(List<InternalAggregation> aggregations, ReduceContext reduceContext) {
-        List<Cluster> combinedResults = new ArrayList<>();
+        List<Bucket> combinedResults = new ArrayList<>();
         long totalNumPoints = 0;
         for (InternalAggregation aggregation : aggregations) {
             InternalGeoKMeans internalGeoKMeans = (InternalGeoKMeans) aggregation;
-            combinedResults.addAll(internalGeoKMeans.getClusters());
+            combinedResults.addAll(internalGeoKMeans.getBuckets());
             totalNumPoints += internalGeoKMeans.getTotalNumPoints();
         }
         if (combinedResults.size() > 0) {
-            Collections.sort(combinedResults, new Comparator<Cluster>() {
+            Collections.sort(combinedResults, new Comparator<Bucket>() {
 
                 @Override
-                public int compare(Cluster o1, Cluster o2) {
+                public int compare(Bucket o1, Bucket o2) {
                     return (int) (o2.getDocCount() - o1.getDocCount());
                 }
             });
@@ -109,11 +111,11 @@ public class InternalGeoKMeans extends InternalAggregation implements GeoKMeans 
             for (int i = 0; i < 100; i++) {
                 kmeans.nextIteration();
             }
-            List<Cluster> results = kmeans.getResults();
-            Collections.sort(results, new Comparator<Cluster>() {
+            List<Bucket> results = kmeans.getResults(reduceContext);
+            Collections.sort(results, new Comparator<Bucket>() {
 
                 @Override
-                public int compare(Cluster o1, Cluster o2) {
+                public int compare(Bucket o1, Bucket o2) {
                     return (int) (o2.getDocCount() - o1.getDocCount());
                 }
             });
@@ -131,54 +133,53 @@ public class InternalGeoKMeans extends InternalAggregation implements GeoKMeans 
     @Override
     public XContentBuilder doXContentBody(XContentBuilder builder, Params params) throws IOException {
         builder.startArray("clusters");
-        for (Cluster cluster : clusters) {
-            cluster.toXContent(builder, params);
+        for (Bucket bucket : buckets) {
+            bucket.toXContent(builder, params);
         }
         builder.endArray();
         builder.field("points_count", totalNumPoints);
         return builder;
     }
 
-    public static class InternalCluster implements Writeable, ToXContent, Cluster {
+    public static class Bucket extends InternalMultiBucketAggregation.InternalBucket implements GeoKMeans.Bucket {
 
-        private GeoPoint centroid;
-        private long docCount;
-        private GeoPoint topLeft;
-        private GeoPoint bottomRight;
-        private Set<GeoPoint> points = null;
+        private final GeoPoint centroid;
+        private final long docCount;
+        private final InternalAggregations aggregations;
 
-        public InternalCluster(GeoPoint centroid, long docCount, GeoPoint topLeft, GeoPoint bottomRight) {
+        public Bucket(GeoPoint centroid, long docCount, InternalAggregations aggregations) {
+            if (centroid == null) {
+                throw new AssertionError("Tried to store a null centroid in a bucket");
+            }
             this.centroid = centroid;
             this.docCount = docCount;
-            this.topLeft = topLeft;
-            this.bottomRight = bottomRight;
+            this.aggregations = aggregations;
         }
 
-        public InternalCluster(StreamInput in) throws IOException {
-            this.centroid = new GeoPoint(in.readDouble(), in.readDouble());
-            this.docCount = in.readVLong();
-            this.topLeft = new GeoPoint(in.readDouble(), in.readDouble());
-            this.bottomRight = new GeoPoint(in.readDouble(), in.readDouble());
+        /**
+         * Read from a stream.
+         */
+        public Bucket(StreamInput in) throws IOException {
+            centroid = in.readGeoPoint();
+            docCount = in.readVLong();
+            aggregations = InternalAggregations.readAggregations(in);
         }
 
         @Override
         public void writeTo(StreamOutput out) throws IOException {
-            out.writeDouble(centroid.getLat());
-            out.writeDouble(centroid.getLon());
+            out.writeGeoPoint(centroid);
             out.writeVLong(docCount);
-            out.writeDouble(topLeft.getLat());
-            out.writeDouble(topLeft.getLon());
-            out.writeDouble(bottomRight.getLat());
-            out.writeDouble(bottomRight.getLon());
+            aggregations.writeTo(out);
         }
 
         @Override
-        public Set<GeoPoint> points() {
-            return points;
+        public Object getKey() {
+            return centroid;
         }
 
-        public void points(Set<GeoPoint> points) {
-            this.points = points;
+        @Override
+        public String getKeyAsString() {
+            return "[" + centroid.lon() + ", " + centroid.lat() + "]";
         }
 
         @Override
@@ -187,50 +188,67 @@ public class InternalGeoKMeans extends InternalAggregation implements GeoKMeans 
         }
 
         @Override
-        public GeoPoint getTopLeft() {
-            return topLeft;
-        }
-
-        @Override
-        public GeoPoint getBottomRight() {
-            return bottomRight;
-        }
-
-        @Override
         public long getDocCount() {
             return docCount;
         }
 
         @Override
+        public Aggregations getAggregations() {
+            return aggregations;
+        }
+
+        @Override
         public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
             builder.startObject();
-            builder.startObject("centroid");
-            builder.field("lat", centroid.getLat());
-            builder.field("lon", centroid.getLon());
-            builder.endObject();
+            builder.field(CommonFields.KEY.getPreferredName(), getKeyAsString());
             builder.field(CommonFields.DOC_COUNT.getPreferredName(), docCount);
-            builder.startObject("top_left");
-            builder.field("lat", topLeft.getLat());
-            builder.field("lon", topLeft.getLon());
-            builder.endObject();
-            builder.startObject("bottom_right");
-            builder.field("lat", bottomRight.getLat());
-            builder.field("lon", bottomRight.getLon());
-            builder.endObject();
-            if (points != null) {
-                builder.startArray("points");
-                for (GeoPoint point : points) {
-                    builder.startObject();
-                    builder.field("lat", point.getLat());
-                    builder.field("lon", point.getLon());
-                    builder.endObject();
-                }
-                builder.endArray();
-            }
+            aggregations.toXContentInternal(builder, params);
             builder.endObject();
             return builder;
         }
+        
+        @Override
+        public int hashCode() {
+            return Objects.hash(centroid, docCount, aggregations);
+        }
+        
+        @Override
+        public boolean equals(Object obj) {
+            if (obj == null) {
+                return false;
+            }
+            if (obj.getClass() != this.getClass()) {
+                return false;
+            }
+            Bucket other = (Bucket) obj;
+            return Objects.equals(centroid, other.centroid) &&
+                    Objects.equals(docCount, other.docCount) &&
+                    Objects.equals(aggregations, other.aggregations);
+        }
 
+    }
+
+    @Override
+    protected int doHashCode() {
+        return Objects.hash(buckets, k, totalNumPoints);
+    }
+
+    @Override
+    protected boolean doEquals(Object obj) {
+        InternalGeoKMeans other = (InternalGeoKMeans) obj;
+        return Objects.equals(k, other.k) &&
+                Objects.equals(totalNumPoints, other.totalNumPoints) &&
+                Objects.equals(buckets, other.buckets);
+    }
+
+    @Override
+    public InternalGeoKMeans create(List<Bucket> buckets) {
+        return new InternalGeoKMeans(NAME, k, buckets, totalNumPoints, pipelineAggregators(), metaData);
+    }
+
+    @Override
+    public Bucket createBucket(InternalAggregations aggregations, Bucket prototype) {
+        return new Bucket(prototype.centroid, prototype.docCount, aggregations);
     }
 
 }

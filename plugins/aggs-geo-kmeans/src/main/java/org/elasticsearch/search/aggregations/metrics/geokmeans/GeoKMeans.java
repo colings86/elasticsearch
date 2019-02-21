@@ -20,27 +20,12 @@
 package org.elasticsearch.search.aggregations.metrics.geokmeans;
 
 import org.elasticsearch.common.geo.GeoPoint;
-import org.elasticsearch.common.io.stream.Writeable;
-import org.elasticsearch.common.xcontent.ToXContent;
-import org.elasticsearch.search.aggregations.Aggregation;
+import org.elasticsearch.search.aggregations.bucket.MultiBucketsAggregation;
 
-import java.util.List;
-import java.util.Set;
+public interface GeoKMeans extends MultiBucketsAggregation {
 
-public interface GeoKMeans extends Aggregation {
-
-    List<Cluster> getClusters();
-
-    public interface Cluster extends ToXContent, Writeable {
+    public interface Bucket extends MultiBucketsAggregation.Bucket {
 
         GeoPoint getCentroid();
-
-        GeoPoint getTopLeft();
-
-        GeoPoint getBottomRight();
-
-        long getDocCount();
-
-        Set<GeoPoint> points();
     }
 }

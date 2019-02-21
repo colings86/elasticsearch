@@ -20,29 +20,28 @@
 package org.elasticsearch.search.aggregations.metrics.geokmeans;
 
 import org.elasticsearch.common.geo.GeoPoint;
-import org.elasticsearch.search.aggregations.metrics.geokmeans.GeoKMeans.Cluster;
+import org.elasticsearch.search.aggregations.InternalAggregation.ReduceContext;
+import org.elasticsearch.search.aggregations.InternalAggregations;
+import org.elasticsearch.search.aggregations.metrics.geokmeans.InternalGeoKMeans.Bucket;
 
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 
 public class StandardKMeans {
 
-    private Set<Cluster>[] combinedClusters;
+    private List<List<Bucket>> combinedClusters;
     private GeoPoint[] centroids;
     private int k;
-    private List<Cluster> clusters;
+    private List<Bucket> clusters;
 
-    @SuppressWarnings({ "unchecked", "rawtypes" })
-    public StandardKMeans(int k, List<Cluster> clusters) {
+    public StandardKMeans(int k, List<Bucket> clusters) {
         this.k = k;
         this.clusters = clusters;
-        combinedClusters = new HashSet[k];
+        combinedClusters = new ArrayList<List<Bucket>>(k);
         centroids = new GeoPoint[k];
         for (int i = 0; i < k; i++) {
-            combinedClusters[i] = new HashSet<>();
-            combinedClusters[i].add(clusters.get(i));
+            combinedClusters.add(new ArrayList<>());
+            combinedClusters.get(i).add(clusters.get(i));
             centroids[i] = clusters.get(i).getCentroid();
         }
     }
@@ -53,48 +52,19 @@ public class StandardKMeans {
         return 0;
     }
 
-    public List<Cluster> getResults() {
-        List<Cluster> results = new ArrayList<>(k);
+    public List<Bucket> getResults(ReduceContext context) {
+        List<Bucket> results = new ArrayList<>(k);
         for (int i = 0; i < k; i++) {
-            Set<Cluster> subClusters = combinedClusters[i];
+            List<Bucket> subClusters = combinedClusters.get(i);
             GeoPoint centroid = centroids[i];
-            GeoPoint topLeft = null;
-            GeoPoint bottomRight = null;
-            Set<GeoPoint> points = null;
             long docCount = 0;
-            for (Cluster subCluster : subClusters) {
+            List<InternalAggregations> subAggregations = new ArrayList<>(subClusters.size());
+            for (Bucket subCluster : subClusters) {
                 docCount += subCluster.getDocCount();
-                if (subCluster.points() != null) {
-                    if (points == null) {
-                        points = new HashSet<>();
-                    }
-                    points.addAll(subCluster.points());
-                }
-                if (topLeft == null) {
-                    topLeft = new GeoPoint(subCluster.getTopLeft());
-                } else {
-                    if (subCluster.getTopLeft().getLat() > topLeft.getLat()) {
-                        topLeft = topLeft.resetLat(subCluster.getTopLeft().getLat());
-                    }
-                    if (subCluster.getTopLeft().getLon() < topLeft.getLon()) {
-                        topLeft = topLeft.resetLon(subCluster.getTopLeft().getLon());
-                    }
-                }
-                if (bottomRight == null) {
-                    bottomRight = new GeoPoint(subCluster.getBottomRight());
-                } else {
-                    if (subCluster.getBottomRight().getLat() < bottomRight.getLat()) {
-                        bottomRight = bottomRight.resetLat(subCluster.getBottomRight().getLat());
-                    }
-                    if (subCluster.getBottomRight().getLon() > bottomRight.getLon()) {
-                        bottomRight = bottomRight.resetLon(subCluster.getBottomRight().getLon());
-                    }
-                }
+                subAggregations.add((InternalAggregations) subCluster.getAggregations());
             }
-            InternalGeoKMeans.InternalCluster cluster = new InternalGeoKMeans.InternalCluster(centroid, docCount, topLeft, bottomRight);
-            if (points != null) {
-                cluster.points(points);
-            }
+            InternalAggregations subAggs = InternalAggregations.reduce(subAggregations, context);
+            InternalGeoKMeans.Bucket cluster = new InternalGeoKMeans.Bucket(centroid, docCount, subAggs);
             results.add(cluster);
         }
         return results;
@@ -102,14 +72,14 @@ public class StandardKMeans {
 
     private void recalculateCentroids() {
         for (int i = 0; i < k; i++) {
-            centroids[i] = recalculateCentroid(combinedClusters[i]);
+            centroids[i] = recalculateCentroid(combinedClusters.get(i));
         }
     }
 
-    private GeoPoint recalculateCentroid(Set<Cluster> clusters) {
+    private GeoPoint recalculateCentroid(List<Bucket> clusters) {
         GeoPoint newCentroid = new GeoPoint(0.0, 0.0);
         int n = 0;
-        for (Cluster cluster : clusters) {
+        for (Bucket cluster : clusters) {
             n++;
             double newLat = newCentroid.lat() + (cluster.getCentroid().lat() - newCentroid.lat()) / n;
             double newLon = newCentroid.lon() + (cluster.getCentroid().lon() - newCentroid.lon()) / n;
@@ -119,9 +89,9 @@ public class StandardKMeans {
     }
 
     private void assignClusters() {
-        for (Cluster cluster : clusters) {
+        for (Bucket cluster : clusters) {
             int nearestCentroidIndex = calculateMinDistance(cluster.getCentroid(), centroids);
-            combinedClusters[nearestCentroidIndex].add(cluster);
+            combinedClusters.get(nearestCentroidIndex).add(cluster);
         }
     }
 

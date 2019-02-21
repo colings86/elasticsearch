@@ -65,6 +65,7 @@ import org.elasticsearch.index.query.SpanContainingQueryBuilder;
 import org.elasticsearch.index.query.SpanFirstQueryBuilder;
 import org.elasticsearch.index.query.SpanMultiTermQueryBuilder;
 import org.elasticsearch.index.query.SpanNearQueryBuilder;
+import org.elasticsearch.index.query.SpanNearQueryBuilder.SpanGapQueryBuilder;
 import org.elasticsearch.index.query.SpanNotQueryBuilder;
 import org.elasticsearch.index.query.SpanOrQueryBuilder;
 import org.elasticsearch.index.query.SpanTermQueryBuilder;
@@ -109,8 +110,8 @@ import org.elasticsearch.search.aggregations.bucket.filter.FiltersAggregationBui
 import org.elasticsearch.search.aggregations.bucket.filter.InternalFilter;
 import org.elasticsearch.search.aggregations.bucket.filter.InternalFilters;
 import org.elasticsearch.search.aggregations.bucket.geogrid.GeoHashGridAggregationBuilder;
-import org.elasticsearch.search.aggregations.bucket.geogrid.InternalGeoHashGrid;
 import org.elasticsearch.search.aggregations.bucket.geogrid.GeoTileGridAggregationBuilder;
+import org.elasticsearch.search.aggregations.bucket.geogrid.InternalGeoHashGrid;
 import org.elasticsearch.search.aggregations.bucket.geogrid.InternalGeoTileGrid;
 import org.elasticsearch.search.aggregations.bucket.global.GlobalAggregationBuilder;
 import org.elasticsearch.search.aggregations.bucket.global.InternalGlobal;
@@ -277,7 +278,6 @@ import java.util.function.Function;
 
 import static java.util.Collections.unmodifiableMap;
 import static java.util.Objects.requireNonNull;
-import static org.elasticsearch.index.query.SpanNearQueryBuilder.SpanGapQueryBuilder;
 
 /**
  * Sets up things that can be done at search time like queries, aggregations, and suggesters.
@@ -426,8 +426,6 @@ public class SearchModule {
                 GeoHashGridAggregationBuilder::parse).addResultReader(InternalGeoHashGrid::new));
         registerAggregation(new AggregationSpec(GeoTileGridAggregationBuilder.NAME, GeoTileGridAggregationBuilder::new,
                 GeoTileGridAggregationBuilder::parse).addResultReader(InternalGeoTileGrid::new));
-        registerAggregation(new AggregationSpec(GeoKMeansAggregationBuilder::new, new GeoKMeansParser(),
-                GeoKMeansAggregationBuilder.AGGREGATION_NAME_FIED).addResultReader(InternalGeoKMeans::new));
         registerAggregation(new AggregationSpec(NestedAggregationBuilder.NAME, NestedAggregationBuilder::new,
                 NestedAggregationBuilder::parse).addResultReader(InternalNested::new));
         registerAggregation(new AggregationSpec(ReverseNestedAggregationBuilder.NAME, ReverseNestedAggregationBuilder::new,
