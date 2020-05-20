@@ -22,7 +22,7 @@ build/
 
 # vscode stuff
 .vscode/
-
+ 
 # testing stuff
 **/.local*
 .vagrant/
